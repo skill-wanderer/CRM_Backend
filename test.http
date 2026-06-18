@@ -1,0 +1,130 @@
+### CRM Backend API Tests
+### Requires VS Code "REST Client" extension or similar
+
+@baseUrl = http://localhost:8080/api
+
+### --------------------------------------------------------
+### 1. Register an Admin User
+### --------------------------------------------------------
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+    "name": "Admin User",
+    "email": "admin@crm.com",
+    "password": "password123",
+    "role": "admin"
+}
+
+### --------------------------------------------------------
+### 2. Login (Get Token)
+### --------------------------------------------------------
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+    "email": "admin@crm.com",
+    "password": "password123"
+}
+
+### Store the token from the response
+@token = {{login.response.body.token}}
+
+### --------------------------------------------------------
+### 3. Create a Lead Template
+### --------------------------------------------------------
+# @name createTemplate
+POST {{baseUrl}}/templates
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "name": "B2B Sales Lead"
+}
+
+### Store Template ID
+@templateId = {{createTemplate.response.body.id}}
+
+### --------------------------------------------------------
+### 4. Add Dynamic Fields to the Template
+### --------------------------------------------------------
+
+### Field 1: Company Name (Required String)
+POST {{baseUrl}}/templates/{{templateId}}/fields
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "name": "companyName",
+    "type": "string",
+    "required": true
+}
+
+### Field 2: Contact Email (Email format)
+POST {{baseUrl}}/templates/{{templateId}}/fields
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "name": "contactEmail",
+    "type": "string",
+    "format": "email",
+    "required": true
+}
+
+### Field 3: Expected Revenue (Currency format)
+POST {{baseUrl}}/templates/{{templateId}}/fields
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "name": "expectedRevenue",
+    "type": "number",
+    "format": "currency",
+    "required": false
+}
+
+### --------------------------------------------------------
+### 5. Get the Template Schema (For Frontend Dynamic Form)
+### --------------------------------------------------------
+GET {{baseUrl}}/templates/{{templateId}}/schema
+Authorization: Bearer {{token}}
+
+### --------------------------------------------------------
+### 6. Create a Lead (Testing Dynamic Validation)
+### --------------------------------------------------------
+POST {{baseUrl}}/leads
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "templateId": {{templateId}},
+    "data": {
+        "companyName": "Acme Corp",
+        "contactEmail": "contact@acmecorp.com",
+        "expectedRevenue": "50000.00"
+    }
+}
+
+### --------------------------------------------------------
+### 7. Create a Lead (Intentionally Fail Validation)
+### --------------------------------------------------------
+POST {{baseUrl}}/leads
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "templateId": {{templateId}},
+    "data": {
+        "companyName": "Globex",
+        "contactEmail": "not-an-email", 
+        "expectedRevenue": "bad-number"
+    }
+}
+
+### --------------------------------------------------------
+### 8. Get All Leads
+### --------------------------------------------------------
+GET {{baseUrl}}/leads
+Authorization: Bearer {{token}}

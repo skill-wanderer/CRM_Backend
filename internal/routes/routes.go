@@ -1,6 +1,9 @@
 package routes
 
 import (
+	"net/http"
+
+	"crm-backend/docs"
 	"crm-backend/internal/admin"
 	adminhandlers "crm-backend/internal/admin/handlers"
 	"crm-backend/internal/auth"
@@ -9,6 +12,8 @@ import (
 	"crm-backend/internal/handlers"
 	"crm-backend/internal/middleware"
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/gorm"
 )
 
@@ -26,6 +31,7 @@ func SetupRouter(deps Dependencies) *gin.Engine {
 	r := gin.Default()
 
 	r.Use(middleware.CORS(deps.Config.CORSAllowedOrigins, deps.Config.Tenancy.Header))
+	registerSwagger(r)
 
 	api := r.Group("/api")
 
@@ -65,4 +71,17 @@ func SetupRouter(deps Dependencies) *gin.Engine {
 	}
 
 	return r
+}
+
+func registerSwagger(r *gin.Engine) {
+	const specPath = "/openapi.yaml"
+
+	r.GET(specPath, func(c *gin.Context) {
+		c.Data(http.StatusOK, "application/yaml; charset=utf-8", docs.OpenAPIYAML)
+	})
+
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(
+		swaggerFiles.Handler,
+		ginSwagger.URL(specPath),
+	))
 }

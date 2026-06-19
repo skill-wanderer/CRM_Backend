@@ -18,6 +18,9 @@ A backend service for CRM functionality built with **Go**, using **Gin** for HTT
 CRM_Backend/
 ├── cmd/
 │   └── server/            # Application entrypoint
+├── docs/
+│   ├── openapi.yaml       # OpenAPI document served by Swagger UI
+│   └── specs/             # Project specs and design notes
 ├── internal/
 │   ├── admin/             # Admin-domain tenant APIs
 │   ├── auth/              # Keycloak/OIDC verifier and claims
@@ -108,6 +111,13 @@ You can use:
 - IntelliJ HTTP Client
 
 to execute requests directly.
+
+## Swagger / OpenAPI
+
+After starting the server, open:
+
+- Swagger UI: `http://localhost:8080/swagger/index.html`
+- OpenAPI YAML: `http://localhost:8080/openapi.yaml`
 
 ## Tenant Management
 

@@ -7,12 +7,22 @@ services:
     ports:
       - "8080:8080"
     environment:
+      - PORT=8080
+      - GIN_MODE=debug
+      - CORS_ALLOWED_ORIGINS=*
       - DB_HOST=postgres
+      - DB_PORT=5432
       - DB_USER=crm_user
       - DB_PASSWORD=crm_password
       - DB_NAME=crm_db
-      - DB_PORT=5432
-      - JWT_SECRET=supersecretkey123
+      - DB_SSLMODE=disable
+      - DB_TIMEZONE=UTC
+      - DB_AUTO_MIGRATE=true
+      - KEYCLOAK_BASE_URL=http://keycloak:8080
+      - KEYCLOAK_ADMIN_REALM=crm-admin
+      - KEYCLOAK_CLIENT_REALM=crm-clients
+      - KEYCLOAK_ADMIN_REQUIRED_ROLE=CRM
+      - TENANT_HEADER=X-Tenant-ID
     depends_on:
       postgres:
         condition: service_healthy

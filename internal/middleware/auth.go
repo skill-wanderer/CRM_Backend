@@ -1,74 +1,57 @@
 package middleware
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
-	"os"
 	"strings"
 
+	"crm-backend/internal/auth"
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 )
 
-func AuthMiddleware() gin.HandlerFunc {
+const ClaimsContextKey = "authClaims"
+
+func Auth(verifier auth.TokenVerifier) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is missing"})
-			c.Abort()
+		rawToken := bearerToken(c.GetHeader("Authorization"))
+		if rawToken == "" {
+			AbortWithError(c, http.StatusUnauthorized, "UNAUTHENTICATED", "missing bearer token")
 			return
 		}
 
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header format must be Bearer {token}"})
-			c.Abort()
-			return
-		}
-
-		tokenString := parts[1]
-		secret := os.Getenv("JWT_SECRET")
-
-		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		claims, err := verifier.Verify(c.Request.Context(), rawToken)
+		if err != nil {
+			if errors.Is(err, auth.ErrBadAudience) {
+				AbortWithError(c, http.StatusUnauthorized, "UNAUTHENTICATED", "token audience is not allowed")
+				return
 			}
-			return []byte(secret), nil
-		})
-
-		if err != nil || !token.Valid {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
-			c.Abort()
+			AbortWithError(c, http.StatusUnauthorized, "UNAUTHENTICATED", "invalid bearer token")
 			return
 		}
 
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
-			c.Abort()
-			return
-		}
-
-		c.Set("userID", claims["sub"])
-		c.Set("role", claims["role"])
+		c.Set(ClaimsContextKey, claims)
 		c.Next()
 	}
 }
 
-func RBACMiddleware(requiredRole string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		role, exists := c.Get("role")
-		if !exists {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Access forbidden: Role not found"})
-			c.Abort()
-			return
-		}
-
-		if role.(string) != requiredRole {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Access forbidden: Insufficient permissions"})
-			c.Abort()
-			return
-		}
-		c.Next()
+func ClaimsFromContext(c *gin.Context) (*auth.Claims, bool) {
+	value, exists := c.Get(ClaimsContextKey)
+	if !exists {
+		return nil, false
 	}
+	claims, ok := value.(*auth.Claims)
+	return claims, ok
+}
+
+func bearerToken(header string) string {
+	header = strings.TrimSpace(header)
+	if header == "" {
+		return ""
+	}
+
+	parts := strings.Fields(header)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+		return ""
+	}
+	return parts[1]
 }

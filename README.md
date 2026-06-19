@@ -8,7 +8,7 @@ A backend service for CRM functionality built with **Go**, using **Gin** for HTT
 - **Web Framework:** Gin (`github.com/gin-gonic/gin`)
 - **ORM:** GORM (`gorm.io/gorm`)
 - **Database Driver:** PostgreSQL (`gorm.io/driver/postgres`)
-- **Auth:** JWT (`github.com/golang-jwt/jwt/v5`)
+- **Auth:** Keycloak / OIDC with admin and client realms
 - **Environment Management:** godotenv (`github.com/joho/godotenv`)
 - **Containerization:** Docker, Docker Compose
 
@@ -19,13 +19,18 @@ CRM_Backend/
 ├── cmd/
 │   └── server/            # Application entrypoint
 ├── internal/
+│   ├── admin/             # Admin-domain tenant APIs
+│   ├── auth/              # Keycloak/OIDC verifier and claims
+│   ├── client/            # Client-domain tenancy foundation
+│   ├── config/            # Typed environment configuration
 │   ├── database/          # DB connection and setup
 │   ├── handlers/          # HTTP handlers/controllers
-│   ├── middleware/        # Middleware (auth, logging, etc.)
+│   ├── middleware/        # Auth, RBAC, user sync, tenant scope, CORS
 │   ├── models/            # Domain/data models
 │   ├── repositories/      # Data access layer
 │   ├── routes/            # Route registration
 │   ├── services/          # Business logic
+│   ├── tenancy/           # Tenant context helpers
 │   └── utils/             # Utility helpers
 ├── Dockerfile
 ├── docker-compose.yml
@@ -45,7 +50,7 @@ CRM_Backend/
 
 Create/update your `.env` file in the project root.
 
-Typical variables include:
+See [`.env.example`](./.env.example) for the full, commented list. Common variables:
 
 - `PORT`
 - `DB_HOST`
@@ -54,7 +59,9 @@ Typical variables include:
 - `DB_PASSWORD`
 - `DB_NAME`
 - `DB_SSLMODE`
-- `JWT_SECRET`
+- `KEYCLOAK_BASE_URL`, `KEYCLOAK_ADMIN_REALM`, `KEYCLOAK_CLIENT_REALM`
+- `KEYCLOAK_ADMIN_REQUIRED_ROLE`
+- `TENANT_HEADER`
 
 > Use strong secrets and never commit production credentials.
 
@@ -102,6 +109,20 @@ You can use:
 
 to execute requests directly.
 
+## Tenant Management
+
+Tenant management is implemented under `/api/admin/tenants`.
+
+All tenant routes require an admin-realm Keycloak token with the configured
+realm role, `CRM` by default:
+
+```http
+Authorization: Bearer <admin-realm-token>
+```
+
+See [docs/tenant-management.md](./docs/tenant-management.md) for the API,
+database model, middleware behavior, and local validation notes.
+
 ## Dependency Management
 
 - Add/update deps: `go get <module>`
@@ -109,9 +130,8 @@ to execute requests directly.
 
 ## Recommended Improvements
 
-- Add `.env.example` with non-sensitive defaults
 - Add structured logging and request tracing
-- Add unit/integration tests for handlers and services
+- Add integration tests against PostgreSQL and a test Keycloak realm
 - Add CI checks (`go test`, `go vet`, `golangci-lint`)
 
 ## License

@@ -1,65 +1,67 @@
 package routes
 
 import (
+	"crm-backend/internal/admin"
+	adminhandlers "crm-backend/internal/admin/handlers"
+	"crm-backend/internal/auth"
+	"crm-backend/internal/client"
+	"crm-backend/internal/config"
 	"crm-backend/internal/handlers"
 	"crm-backend/internal/middleware"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
-func SetupRouter(
-	authHandler *handlers.AuthHandler,
-	templateHandler *handlers.TemplateHandler,
-	leadHandler *handlers.LeadHandler,
-) *gin.Engine {
+type Dependencies struct {
+	Config          *config.Config
+	DB              *gorm.DB
+	TemplateHandler *handlers.TemplateHandler
+	LeadHandler     *handlers.LeadHandler
+	TenantHandler   *adminhandlers.TenantHandler
+	AdminVerifier   auth.TokenVerifier
+	ClientVerifier  auth.TokenVerifier
+}
+
+func SetupRouter(deps Dependencies) *gin.Engine {
 	r := gin.Default()
 
-	// CORS middleware could be added here
+	r.Use(middleware.CORS(deps.Config.CORSAllowedOrigins, deps.Config.Tenancy.Header))
 
 	api := r.Group("/api")
 
-	// Auth routes
-	auth := api.Group("/auth")
+	admin.RegisterRoutes(api, deps.TenantHandler, deps.AdminVerifier, deps.Config.Keycloak.AdminRole)
+	client.RegisterRoutes(api, deps.ClientVerifier, deps.DB, deps.Config.Tenancy.Header)
+
+	// Templates
+	templates := api.Group("/templates")
 	{
-		auth.POST("/register", authHandler.Register)
-		auth.POST("/login", authHandler.Login)
+		templates.POST("", deps.TemplateHandler.CreateTemplate)
+		templates.GET("", deps.TemplateHandler.GetTemplates)
+		templates.GET("/:id", deps.TemplateHandler.GetTemplate)
+		templates.PUT("/:id", deps.TemplateHandler.UpdateTemplate)
+		templates.DELETE("/:id", deps.TemplateHandler.DeleteTemplate)
+
+		// Fields — use same :id param to avoid Gin wildcard conflict
+		templates.POST("/:id/fields", deps.TemplateHandler.AddField)
+		templates.GET("/:id/fields", deps.TemplateHandler.GetFields)
+		templates.GET("/:id/schema", deps.TemplateHandler.GetTemplateSchema)
 	}
 
-	// Protected routes
-	protected := api.Group("")
-	protected.Use(middleware.AuthMiddleware())
+	// Fields directly (for PUT/DELETE as per requirements)
+	fields := api.Group("/fields")
 	{
-		// Templates
-		templates := protected.Group("/templates")
-		{
-			templates.POST("", middleware.RBACMiddleware("admin"), templateHandler.CreateTemplate)
-			templates.GET("", templateHandler.GetTemplates)
-			templates.GET("/:id", templateHandler.GetTemplate)
-			templates.PUT("/:id", middleware.RBACMiddleware("admin"), templateHandler.UpdateTemplate)
-			templates.DELETE("/:id", middleware.RBACMiddleware("admin"), templateHandler.DeleteTemplate)
+		fields.PUT("/:fieldId", deps.TemplateHandler.UpdateField)
+		fields.DELETE("/:fieldId", deps.TemplateHandler.DeleteField)
+	}
 
-			// Fields — use same :id param to avoid Gin wildcard conflict
-			templates.POST("/:id/fields", middleware.RBACMiddleware("admin"), templateHandler.AddField)
-			templates.GET("/:id/fields", templateHandler.GetFields)
-			templates.GET("/:id/schema", templateHandler.GetTemplateSchema)
-		}
-
-		// Fields directly (for PUT/DELETE as per requirements)
-		fields := protected.Group("/fields")
-		fields.Use(middleware.RBACMiddleware("admin"))
-		{
-			fields.PUT("/:fieldId", templateHandler.UpdateField)
-			fields.DELETE("/:fieldId", templateHandler.DeleteField)
-		}
-
-		// Leads
-		leads := protected.Group("/leads")
-		{
-			leads.POST("", leadHandler.CreateLead)
-			leads.GET("", leadHandler.GetLeads)
-			leads.GET("/:id", leadHandler.GetLead)
-			leads.PUT("/:id", leadHandler.UpdateLead)
-			leads.DELETE("/:id", leadHandler.DeleteLead)
-		}
+	// Leads
+	leads := api.Group("/leads")
+	{
+		leads.POST("", deps.LeadHandler.CreateLead)
+		leads.GET("", deps.LeadHandler.GetLeads)
+		leads.GET("/:id", deps.LeadHandler.GetLead)
+		leads.PUT("/:id", deps.LeadHandler.UpdateLead)
+		leads.DELETE("/:id", deps.LeadHandler.DeleteLead)
 	}
 
 	return r
